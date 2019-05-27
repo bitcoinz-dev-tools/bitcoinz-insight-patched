@@ -124,6 +124,7 @@ public:
     /** Enforce coinbase consensus rule in regtest mode */
     void SetRegTestCoinbaseMustBeProtected() { consensus.fCoinbaseMustBeProtected = true; }
     int GetFutureBlockTimeWindow(int height) const;
+    int GetRollingCheckpointStartHeight() const { return vRollingCheckpointStartHeight; }
 protected:
     CChainParams() {}
 
@@ -156,6 +157,7 @@ protected:
     int vCommunityFeeStartHeight;
     int vCommunityFeeLastHeight;
     MapFutureBlockTimeWindows futureBlockTimeWindows;
+    int vRollingCheckpointStartHeight;
 };
 
 /**
