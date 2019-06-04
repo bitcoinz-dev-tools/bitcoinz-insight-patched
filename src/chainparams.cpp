@@ -121,10 +121,11 @@ public:
         eh_epoch_1_endblock = 160010;
         eh_epoch_2_startblock = 160000;
 
-        futureBlockTimeWindows = boost::assign::map_list_of
-            ( 0, 2 * 60 ) // originally 2 hours
-            ( 159300, 30 ) // 30 minutes
-            ( 364400, 5 ); // 5 minutes
+        futureBlockTimeWindows = {
+            {0, 2 * 60}, // originally 2 hours
+            {159300, 30}, // 30 minutes
+            {364400, 5} // 5 minutes
+        };
 
         vRollingCheckpointStartHeight = 364400;
 
@@ -364,10 +365,11 @@ public:
         eh_epoch_1_endblock = 1210;
         eh_epoch_2_startblock = 1200;
 
-        futureBlockTimeWindows = boost::assign::map_list_of
-            ( 0, 2 * 60 ) // originally 2 hours
-            ( 13999, 30 ) // 30 minutes
-            ( 14000, 5 ); // 5 minutes
+        futureBlockTimeWindows = {
+            {0, 2 * 60}, // originally 2 hours
+            {13999, 30}, // 30 minutes
+            {14000, 5} // 5 minutes
+        };
 
         vRollingCheckpointStartHeight = 14000;
 
@@ -584,10 +586,11 @@ public:
         eh_epoch_1_endblock = 1;
         eh_epoch_2_startblock = 1;
 
-        futureBlockTimeWindows = boost::assign::map_list_of
-            ( 0, 2 * 60 ) // originally 2 hours
-            ( 159300, 30 ) // 30 minutes
-            ( 364400, 5 ); // 5 minutes
+        futureBlockTimeWindows = {
+            {0, 2 * 60}, // originally 2 hours
+            {159300, 30}, // 30 minutes
+            {364400, 5} // 5 minutes
+        };
 
         vRollingCheckpointStartHeight = 364400;
 
