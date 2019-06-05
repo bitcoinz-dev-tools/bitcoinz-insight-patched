@@ -3206,6 +3206,7 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
 static CBlockIndex* FindMostWorkChain() {
     do {
         CBlockIndex *pindexNew = NULL;
+        CBlockIndex *pindexOldTip = chainActive.Tip();
 
         // Find the best candidate header.
         {
@@ -3228,14 +3229,48 @@ static CBlockIndex* FindMostWorkChain() {
             // to a chain unless we have all the non-active-chain parent blocks.
             bool fFailedChain = pindexTest->nStatus & BLOCK_FAILED_MASK;
             bool fMissingData = !(pindexTest->nStatus & BLOCK_HAVE_DATA);
-            if (fFailedChain || fMissingData) {
+
+            bool fInvalidChain = false;
+
+            // check last few blocks for reorg
+            const CChainParams& chainParams = Params();
+            if(pindexOldTip != NULL && pindexOldTip->nHeight > chainParams.GetRollingCheckpointStartHeight()
+                && !GetBoolArg("-disablereorgprotection", false))
+            {
+                // check some last hash
+                // CHECK_REORG
+                int heightCheck = pindexOldTip->nHeight - DEFAULT_REORG_CHECK;
+                const CBlockIndex *pindexOldTipCheck = FindBlockAtHeight(heightCheck, (const CBlockIndex*)pindexOldTip);
+                const CBlockIndex *pindexTestCheck = FindBlockAtHeight(heightCheck, (const CBlockIndex*)pindexTest);
+                if(pindexOldTipCheck->phashBlock != pindexTestCheck->phashBlock)
+                {
+                    auto msg = strprintf(
+                    "Invalid block hash"
+                      "\n\n") +
+                    _("Block details") + ":\n" +
+                    "- " + strprintf(_("Current tip: %s, height %d"),
+                        pindexOldTipCheck->phashBlock->GetHex(), pindexOldTipCheck->nHeight) + "\n" +
+                    "- " + strprintf(_("New tip:     %s, height %d"),
+                        pindexTestCheck->phashBlock->GetHex(), pindexTestCheck->nHeight) + "\n";
+                    LogPrintf("*** %s\n", msg);
+                    fInvalidChain = true;
+                }
+                else
+                {
+                    LogPrintf("Block hash is correct %s, height %d\n", pindexOldTipCheck->phashBlock->GetHex(), pindexOldTipCheck->nHeight);
+                    fInvalidChain = false;
+                }
+            }
+
+            if (fFailedChain || fMissingData || fInvalidChain) {
                 // Candidate chain is not usable (either invalid or missing data)
-                if (fFailedChain && (pindexBestInvalid == NULL || pindexNew->nChainWork > pindexBestInvalid->nChainWork))
+                if ((fFailedChain || fInvalidChain) 
+                    && (pindexBestInvalid == NULL || pindexNew->nChainWork > pindexBestInvalid->nChainWork))
                     pindexBestInvalid = pindexNew;
                 CBlockIndex *pindexFailed = pindexNew;
                 // Remove the entire chain from the set.
                 while (pindexTest != pindexFailed) {
-                    if (fFailedChain) {
+                    if (fFailedChain || fInvalidChain) {
                         pindexFailed->nStatus |= BLOCK_FAILED_CHILD;
                     } else if (fMissingData) {
                         // If we're missing data, then add back to mapBlocksUnlinked,
@@ -3269,6 +3304,13 @@ static void PruneBlockIndexCandidates() {
     assert(!setBlockIndexCandidates.empty());
 }
 
+const CBlockIndex* FindBlockAtHeight(int nHeight, const CBlockIndex* pIndex) {
+    while (pIndex && pIndex->nHeight > nHeight) {
+        pIndex = pIndex->pprev;
+    }
+    return pIndex;
+}
+
 /**
  * Try to make some progress towards making pindexMostWork the active block.
  * pblock is either NULL or a pointer to a CBlock corresponding to pindexMostWork.
@@ -3279,6 +3321,8 @@ static bool ActivateBestChainStep(CValidationState &state, CBlockIndex *pindexMo
     const CBlockIndex *pindexOldTip = chainActive.Tip();
     const CBlockIndex *pindexFork = chainActive.FindFork(pindexMostWork);
 
+    // On the BitcoinZ network, we will not allow to reach this code
+    // For normal node, do not shutdown, just display error message
     // - On ChainDB initialization, pindexOldTip will be null, so there are no removable blocks.
     // - If pindexMostWork is in a chain that doesn't have the same genesis block as our chain,
     //   then pindexFork will be null, and we would need to remove the entire chain including
@@ -3286,21 +3330,14 @@ static bool ActivateBestChainStep(CValidationState &state, CBlockIndex *pindexMo
     auto reorgLength = pindexOldTip ? pindexOldTip->nHeight - (pindexFork ? pindexFork->nHeight : -1) : 0;
     static_assert(MAX_REORG_LENGTH > 0, "We must be able to reorg some distance");
     if (reorgLength > MAX_REORG_LENGTH) {
-        auto msg = strprintf(_(
-            "A block chain reorganization has been detected that would roll back %d blocks! "
-            "This is larger than the maximum of %d blocks, and so the node is shutting down for your safety."
-            ), reorgLength, MAX_REORG_LENGTH) + "\n\n" +
+        auto msg = strprintf(_("A block chain reorganization has been detected that would roll back %d blocks! "),
+            reorgLength) + "\n\n" +
             _("Reorganization details") + ":\n" +
             "- " + strprintf(_("Current tip: %s, height %d, work %s"),
                 pindexOldTip->phashBlock->GetHex(), pindexOldTip->nHeight, pindexOldTip->nChainWork.GetHex()) + "\n" +
-            "- " + strprintf(_("New tip:     %s, height %d, work %s"),
-                pindexMostWork->phashBlock->GetHex(), pindexMostWork->nHeight, pindexMostWork->nChainWork.GetHex()) + "\n" +
-            "- " + strprintf(_("Fork point:  %s, height %d"),
-                pindexFork->phashBlock->GetHex(), pindexFork->nHeight) + "\n\n" +
             _("Please help, human!");
         LogPrintf("*** %s\n", msg);
         uiInterface.ThreadSafeMessageBox(msg, "", CClientUIInterface::MSG_ERROR);
-        StartShutdown();
         return false;
     }
 
@@ -3722,16 +3759,12 @@ bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, bool f
         return state.DoS(50, error("CheckBlockHeader(): proof of work failed"),
                          REJECT_INVALID, "high-hash");
 
-    // Check timestamp (old)
-    if (nHeight < chainParams.GetNewTimeRule() && block.GetBlockTime() > GetAdjustedTime() + 2 * 60 * 60) {
+    // Check timestamp is within the allowed window to help decrease effectiveness of timewarp attacks
+    int futureBlockTimeWindow = Params().GetFutureBlockTimeWindow(nHeight);
+    if (block.GetBlockTime() > GetAdjustedTime() + futureBlockTimeWindow)
         return state.Invalid(error("CheckBlockHeader(): block timestamp too far in the future"),
                              REJECT_INVALID, "time-too-new");
 
-    // starting at height 159300, decrease to 30 minute window to decrease effectiveness of timewarp attack.
-    } else if (nHeight >= chainParams.GetNewTimeRule() && block.GetBlockTime() > GetAdjustedTime() + 30 * 60) {
-        return state.Invalid(error("CheckBlockHeader(): block timestamp too far in the future"),
-                             REJECT_INVALID, "time-too-new");
-    }
     return true;
 }
 

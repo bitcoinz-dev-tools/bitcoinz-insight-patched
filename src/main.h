@@ -102,6 +102,7 @@ static const unsigned int DATABASE_FLUSH_INTERVAL = 24 * 60 * 60;
 /** Maximum length of reject messages. */
 static const unsigned int MAX_REJECT_MESSAGE_LENGTH = 111;
 static const int64_t DEFAULT_MAX_TIP_AGE = 24 * 60 * 60;
+static const unsigned int DEFAULT_REORG_CHECK = 6;
 static const bool DEFAULT_ADDRESSINDEX = false;
 static const bool DEFAULT_TIMESTAMPINDEX = false;
 static const bool DEFAULT_SPENTINDEX = false;
@@ -268,6 +269,8 @@ void PruneAndFlush();
 bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransaction &tx, bool fLimitFree,
                         bool* pfMissingInputs, bool fRejectAbsurdFee=false);
 
+/** Find block at height in a fork **/
+const CBlockIndex* FindBlockAtHeight(int nHeight, const CBlockIndex* pIndex);
 
 struct CNodeStateStats {
     int nMisbehavior;
