@@ -1,3 +1,7 @@
+
+# THIS REPO IS NO LONGER NEEEDED AND HAS BEEN ARCHIVED
+
+
 =======
 # BitcoinZ
 **Keep running wallet to strengthen the BitcoinZ network. Backup your wallet in many locations & keep your coins wallet offline.**
